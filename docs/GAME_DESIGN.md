@@ -40,7 +40,12 @@ Items marked **OPEN** need a decision from Tim. Items marked **PROPOSED** are de
 
 - **Decided:** the player starts on a "work release" deal, owing the Kingdom a huge debt. The early goal is to **pay off the debt**. Paying it off ends Act 1.
 - Players can fall back into trouble: attacking innocent players makes you **wanted** and earns a fine (see §10A).
-- **OPEN.** Who runs the Kingdom? (A king or queen, a pompous royal bureaucracy, a robot monarch?) A funny ruler could be a recurring character.
+- **Decided:** the Kingdom's ruler is a **funny recurring character** who shows up in story scenes, announcements, fines and loading-screen decrees.
+- **OPEN.** Which ruler? Ideas to pick from or riff on:
+  - A tiny, very self-important king who insists on being called "Your Enormousness"
+  - A queen who is clearly a cat, and nobody in the Kingdom will admit it
+  - A malfunctioning royal robot that issues ridiculous decrees ("All asteroids must now be polished")
+  - A royal accountant who runs everything and loves fining people a little too much
 - **OPEN.** Is there a rival? (e.g. another ex-prisoner, a smug noble mining company, a Kingdom tax collector who keeps showing up)
 - **OPEN.** What happens after the debt is paid: does the game end, or does the player keep building an empire (maybe even buying influence in the Kingdom)?
 - **OPEN.** Names: the player's mothership, the Kingdom, the starting star system, the prison.
