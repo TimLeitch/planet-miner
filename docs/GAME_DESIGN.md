@@ -23,10 +23,9 @@ Items marked **OPEN** need a decision from Tim. Items marked **PROPOSED** are de
 
 **Session style:** **PROPOSED.** Active play (flying, deploying, crafting) plus offline progress, so mining ships keep working for a capped time while the player is away.
 
-**Single-player or multiplayer:** **OPEN.** Options:
-- A. Single-player only, cloud saves (simplest)
-- B. Single-player with shared leaderboards
-- C. Shared galaxy where players compete to buy planets and trade with each other (much bigger scope)
+**Single-player or multiplayer:** **Multiplayer, shared galaxy** (decided by implication, Tim 2026-11-08: players can attack each other and collect bounties, see §10A). Players share one galaxy, can meet, fight, and hunt wanted players.
+- **OPEN.** Is it one big shared galaxy, or several servers/shards?
+- **OPEN.** Can players also trade with each other directly?
 
 ## 2. Story and setting
 
@@ -39,7 +38,8 @@ Items marked **OPEN** need a decision from Tim. Items marked **PROPOSED** are de
 
 ### 2.2 Still open
 
-- **OPEN.** Is the player still serving their sentence at the start (mining to pay off a debt to the Kingdom and earn freedom), or already released and starting over? *Draft assumption: the game opens with the player on a "work release" contract owing the Kingdom a huge debt; paying it off is the end of Act 1.*
+- **Decided:** the player starts on a "work release" deal, owing the Kingdom a huge debt. The early goal is to **pay off the debt**. Paying it off ends Act 1.
+- Players can fall back into trouble: attacking innocent players makes you **wanted** and earns a fine (see §10A).
 - **OPEN.** Who runs the Kingdom? (A king or queen, a pompous royal bureaucracy, a robot monarch?) A funny ruler could be a recurring character.
 - **OPEN.** Is there a rival? (e.g. another ex-prisoner, a smug noble mining company, a Kingdom tax collector who keeps showing up)
 - **OPEN.** What happens after the debt is paid: does the game end, or does the player keep building an empire (maybe even buying influence in the Kingdom)?
@@ -140,6 +140,21 @@ PROPOSED tiers (names are placeholders):
 - PROPOSED: player rank or company level, raised by total trade volume.
 - Achievements for milestones.
 
+## 10A. Law, crime and bounties
+
+Decided by Tim (2026-11-08); details below are PROPOSED.
+
+- **Attacking another player** who is not wanted is a crime. The Kingdom fines you, and you become **Wanted**.
+- **Wanted players** carry a **bounty**. Any player who defeats a Wanted player collects the bounty, with no fine.
+- Fines add to your debt with the Kingdom. Unpaid fines grow the bounty on your head, so crime can drag a player right back into the debt they worked to clear (fitting the ex-prisoner story).
+- Wanted status clears when you pay your fines, or when someone collects your bounty.
+- PROPOSED safe zones: Kingdom-patrolled systems (including the starting system) where no player combat is allowed, so new players can't be farmed.
+- PROPOSED loss on defeat: you lose part of the cargo you're carrying (not owned planets or ships), and it drops for the winner.
+- **OPEN.** What is combat like? Real-time ship fights, or a quick automatic battle resolved by ship stats?
+- **OPEN.** Can players attack mining ships on someone's planet, or only motherships in space?
+- **OPEN.** Can players opt out of PvP entirely (a peaceful mode)?
+- **OPEN.** Are there NPC criminals with bounties too, for players who don't want to fight people?
+
 ## 11. User interface
 
 Main screens (PROPOSED). Each one needs a phone layout and a desktop layout:
@@ -170,6 +185,8 @@ Main screens (PROPOSED). Each one needs a phone layout and a desktop layout:
 - **Hosting:** Firebase Hosting
 - **Security:** Firestore security rules so each player can read only their own save and cannot write credits or inventory directly; those change only through Cloud Functions
 - **Local dev:** Firebase Emulator Suite for auth, Firestore and functions
+
+**Multiplayer note:** because players share a galaxy and can fight, all combat, fines and bounty payouts must be decided by Cloud Functions, never by the browser. Firestore real-time listeners are fine for seeing other ships and turn-based or automatic battles. Fast real-time ship combat would need a dedicated game server alongside Firebase, so the combat style choice in §10A affects the tech stack.
 
 **OPEN.** Is the existing Firebase project the one to use, or should this game get its own project? (Own project recommended, keeps billing and data separate.)
 
@@ -204,8 +221,9 @@ Main screens (PROPOSED). Each one needs a phone layout and a desktop layout:
 ## 16. Open questions summary
 
 1. Target audience and session length (§1)
-2. Single-player vs shared galaxy (§1)
-3. Story: sentence vs released, Kingdom ruler, rival, ending, names (§2.2)
+2. One galaxy or several shards; player-to-player trading (§1)
+3. Story: Kingdom ruler, rival, ending, names (§2.2)
+3a. Combat style, what can be attacked, PvP opt-out, NPC bounties (§10A)
 4. Multiple motherships? Fuel? (§4)
 5. Fixed or per-player galaxy (§5.1)
 6. Can planets be lost? Building on planets? (§5.3)

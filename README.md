@@ -22,12 +22,13 @@ A browser-based space mining and trading game. You command a large mothership, t
 - Crafting tree that turns raw resources into tradeable and buildable goods
 - Planet economies with supply, demand, and contracts
 - A story campaign that unfolds as you expand
+- Shared galaxy with player combat: attack the innocent and get fined and wanted, hunt wanted players for bounties
 - Plays on desktop and mobile browsers, with touch and mouse controls
 - User accounts with cloud saves (pick up on any device)
 
 ## Story in one line
 
-You're an ex-convict sent out to mine the Kingdom's planets. Every planet belongs to the Crown, so you pay for the right to dig, then craft, haggle and hustle your way from prisoner to tycoon. Light-hearted, funny sci-fi.
+You're an ex-convict sent out to mine the Kingdom's planets. Every planet belongs to the Crown, so you pay for the right to dig, then craft, haggle and hustle to pay off your debt to the Kingdom. Step out of line and attack other players, and the fines pile back on. Hunt wanted players instead and collect their bounties. Light-hearted, funny sci-fi.
 
 ## Tech stack
 
