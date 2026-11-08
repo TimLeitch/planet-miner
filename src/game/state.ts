@@ -40,7 +40,14 @@ export interface GameState {
   log: string[];
   lastTick: number;
   decreeIn: number;
+  autoSell: Partial<Record<GoodId, AutoRule>>;
+  autoSellIn: number; // seconds until next auto-sell run
+  autoReport: { units: number; credits: number; in: number }; // batched log line
 }
+
+export interface AutoRule { on: boolean; keep: number }
+export const AUTO_SELL_EVERY = 5;
+const AUTO_REPORT_EVERY = 60;
 
 const DRONE_NAMES = ['Digby', 'Rocky', 'Sir Drills-a-Lot', 'Pebbles', 'Scoop', 'Gravel Gus', 'Dusty', 'Bort', 'Clanky', 'Molly Mole'];
 
@@ -67,6 +74,9 @@ export function newGame(now: number): GameState {
     ],
     lastTick: now,
     decreeIn: 90,
+    autoSell: {},
+    autoSellIn: AUTO_SELL_EVERY,
+    autoReport: { units: 0, credits: 0, in: AUTO_REPORT_EVERY },
   };
 }
 
@@ -160,6 +170,8 @@ export type Action =
   | { type: 'craft'; recipe: ItemId }
   | { type: 'sell'; good: GoodId; qty: number }
   | { type: 'payDebt'; amount: number }
+  | { type: 'setAutoSell'; good: GoodId; on?: boolean; keep?: number }
+  | { type: 'setAutoSellGroup'; goods: GoodId[]; on: boolean }
   | { type: 'reset'; now: number };
 
 export function reduce(prev: GameState, a: Action): GameState {
@@ -257,14 +269,22 @@ export function reduce(prev: GameState, a: Action): GameState {
       const m = currentMarket(s);
       const qty = Math.min(Math.floor(a.qty), have(s, a.good));
       if (!m || qty <= 0) return prev;
-      const earned = quoteSale(s, m, a.good, qty);
-      const before = rank(s);
-      s.credits += earned;
-      s.earned += earned;
-      s.hold[a.good] = (s.hold[a.good] ?? 0) - qty;
-      s.demand[dkey(m, a.good)] = Math.max(DEMAND_FLOOR, demandOf(s, m, a.good) - DEMAND_DROP_PER_UNIT * qty);
+      const earned = sellGood(s, m, a.good, qty);
       addLog(s, `Sold ${qty} ${GOODS[a.good].name} at ${m.name} for ${earned.toLocaleString()} cr.`);
-      if (rank(s) > before) addLog(s, `⭐ Rank up! You are now rank ${rank(s)}: ${title(s)}.`);
+      return s;
+    }
+
+    case 'setAutoSell': {
+      const cur = s.autoSell[a.good] ?? { on: false, keep: 0 };
+      s.autoSell[a.good] = {
+        on: a.on ?? cur.on,
+        keep: a.keep === undefined ? cur.keep : Math.max(0, Math.floor(a.keep) || 0),
+      };
+      return s;
+    }
+
+    case 'setAutoSellGroup': {
+      for (const g of a.goods) s.autoSell[g] = { on: a.on, keep: s.autoSell[g]?.keep ?? 0 };
       return s;
     }
 
@@ -280,6 +300,31 @@ export function reduce(prev: GameState, a: Action): GameState {
       }
       return s;
     }
+  }
+}
+
+/** Sell from the hold at market `m`. Mutates `s`, returns credits earned. */
+function sellGood(s: GameState, m: PlanetDef, g: GoodId, qty: number): number {
+  const earned = quoteSale(s, m, g, qty);
+  const before = rank(s);
+  s.credits += earned;
+  s.earned += earned;
+  s.hold[g] = (s.hold[g] ?? 0) - qty;
+  s.demand[dkey(m, g)] = Math.max(DEMAND_FLOOR, demandOf(s, m, g) - DEMAND_DROP_PER_UNIT * qty);
+  if (rank(s) > before) addLog(s, `⭐ Rank up! You are now rank ${rank(s)}: ${title(s)}.`);
+  return earned;
+}
+
+/** Sell everything above each rule's keep amount at the current market. */
+export function runAutoSell(s: GameState) {
+  const m = currentMarket(s);
+  if (!m) return; // in transit: wait until we arrive
+  for (const [g, rule] of Object.entries(s.autoSell) as [GoodId, AutoRule][]) {
+    if (!rule?.on) continue;
+    const qty = have(s, g) - rule.keep;
+    if (qty <= 0) continue;
+    s.autoReport.credits += sellGood(s, m, g, qty);
+    s.autoReport.units += qty;
   }
 }
 
@@ -328,6 +373,20 @@ export function tick(s: GameState, now: number) {
   // Market demand recovers
   for (const k of Object.keys(s.demand)) s.demand[k] = Math.min(1, s.demand[k] + DEMAND_RECOVERY_PER_SEC * dt);
 
+  // Auto-sell
+  s.autoSellIn -= dt;
+  if (s.autoSellIn <= 0) {
+    runAutoSell(s);
+    s.autoSellIn = AUTO_SELL_EVERY;
+  }
+  s.autoReport.in -= dt;
+  if (s.autoReport.in <= 0) {
+    if (s.autoReport.units > 0) {
+      addLog(s, `🤖 Auto-sell: ${s.autoReport.units.toLocaleString()} units sold for ${s.autoReport.credits.toLocaleString()} cr.`);
+    }
+    s.autoReport = { units: 0, credits: 0, in: AUTO_REPORT_EVERY };
+  }
+
   // Royal decrees
   s.decreeIn -= dt;
   if (s.decreeIn <= 0) {
@@ -349,7 +408,13 @@ interface V1Save {
 
 export function migrate(raw: unknown, now: number): GameState | null {
   const v = raw as { version?: number };
-  if (v?.version === SAVE_VERSION) return raw as GameState;
+  if (v?.version === SAVE_VERSION) {
+    const s = raw as GameState;
+    s.autoSell ??= {};
+    s.autoSellIn ??= AUTO_SELL_EVERY;
+    s.autoReport ??= { units: 0, credits: 0, in: AUTO_REPORT_EVERY };
+    return s;
+  }
   if (v?.version === 1) {
     const o = raw as V1Save;
     const s = newGame(o.lastTick ?? now);

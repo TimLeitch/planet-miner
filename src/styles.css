@@ -101,6 +101,16 @@ button:focus-visible, select:focus-visible, .planet:focus-visible { outline: 2px
 .recipe, .market-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; border-top: 1px solid var(--line); padding-top: 8px; }
 .market-row .btns { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .cost .short { color: var(--bad); }
+.market-info { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.auto-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 2px; }
+.switch { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; cursor: pointer; font-size: .85rem; }
+.switch input { appearance: none; width: 38px; height: 22px; min-height: 0; min-width: 38px; padding: 0; border: 0; flex: 0 0 auto; border-radius: 999px; background: #2a3558; position: relative; cursor: pointer; margin: 0; transition: background .15s; }
+.switch input::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #cfd6ea; transition: transform .15s; }
+.switch input:checked { background: var(--ok); }
+.switch input:checked::after { transform: translateX(16px); background: #fff; }
+.switch input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.keep { display: inline-flex; align-items: center; gap: 6px; }
+.keep input { width: 72px; min-height: 36px; padding: 4px 8px; }
 .log { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: .9rem; max-height: 280px; overflow-y: auto; }
 
 input { min-height: 44px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: #0e1428; color: var(--text); font: inherit; min-width: 0; }

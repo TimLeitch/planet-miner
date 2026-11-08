@@ -232,6 +232,7 @@ Built at Tim's request so players can "really experiment" in the browser:
 - **Drone Bay:** every drone has its own name, assignment and upgrades: Drill (1-10, mining speed), Hull (0-5, lets it land on hazardous planets), Extractor (0-2, mines Rare then Legendary resources).
 - **Goods:** 10 resources in 4 rarities (Common to Legendary, appearing in later systems) and 12 crafted items.
 - **Markets:** each system's market pays a different bonus and "loves" three items (+40%). Flooding a market drops its price; it recovers over time.
+- **Auto-sell** (Tim, 2026-11-08): turn on auto-sell per item, with a "keep" amount so crafting/upgrade materials aren't sold. It sells every 5 seconds at the market where the mothership is parked, keeps working while the player is away (within the 8-hour offline cap), pauses during travel, and posts a summary to the log once a minute. Quick buttons turn it on for all raw resources or all crafted items.
 - **Rank 1 to 100** from lifetime sales, with funny titles every 10 ranks (Convict → Royal Pain).
 - Local save in the browser with up to 8 hours of offline mining.
 

@@ -165,3 +165,47 @@ describe('mothership, drones and travel', () => {
     expect(s.drones.length).toBeLessThanOrEqual(s.modules.hangar + 1);
   });
 });
+
+describe('auto-sell', () => {
+  it('sells everything above the keep amount every few seconds', () => {
+    let s: GameState = { ...newGame(T0), hold: { iron: 50, carbon: 20 } };
+    s = reduce(s, { type: 'setAutoSell', good: 'iron', on: true, keep: 10 });
+    s = at(s, 6);
+    expect(have(s, 'iron')).toBe(10);
+    expect(have(s, 'carbon')).toBe(20); // not enabled
+    expect(s.credits).toBeGreaterThan(STARTING_CREDITS);
+    expect(s.earned).toBe(s.credits - STARTING_CREDITS);
+  });
+
+  it('keeps selling mined resources while away and logs a summary', () => {
+    let s = newGame(T0);
+    s = reduce(s, { type: 'buyPlanet', planetId: 'rustball' });
+    s = reduce(s, { type: 'deploy', droneId: 1, planetId: 'rustball' });
+    s = reduce(s, { type: 'setAutoSellGroup', goods: ['iron', 'carbon'], on: true });
+    for (let i = 0; i < 24; i++) s = at(s, 5); // two minutes of play
+    expect(have(s, 'iron')).toBeLessThan(5);
+    expect(s.earned).toBeGreaterThan(0);
+    expect(s.log.some((l) => l.includes('Auto-sell'))).toBe(true);
+  });
+
+  it('waits while the mothership is in transit', () => {
+    let s: GameState = { ...newGame(T0), credits: 1e6, hold: { steel: 10, iron: 30 } };
+    s = reduce(s, { type: 'upgradeModule', module: 'engines' });
+    s = reduce(s, { type: 'setAutoSell', good: 'iron', on: true });
+    s = reduce(s, { type: 'travel', to: 's2' });
+    const credits = s.credits;
+    s = at(s, 5.5);
+    expect(s.travel).not.toBeNull();
+    expect(have(s, 'iron')).toBe(30);
+    expect(s.credits).toBe(credits);
+  });
+
+  it('turning a rule off stops it', () => {
+    let s: GameState = { ...newGame(T0), hold: { iron: 50 } };
+    s = reduce(s, { type: 'setAutoSell', good: 'iron', on: true, keep: 5 });
+    s = reduce(s, { type: 'setAutoSell', good: 'iron', on: false });
+    expect(s.autoSell.iron).toEqual({ on: false, keep: 5 });
+    s = at(s, 10);
+    expect(have(s, 'iron')).toBe(50);
+  });
+});

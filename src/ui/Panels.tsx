@@ -4,7 +4,7 @@ import {
   RESOURCE_IDS, ResourceId, SYSTEMS, droneCost, earningsForRank, planetById, planetsIn, systemById,
 } from '../game/data';
 import {
-  GameState, canReach, currentMarket, demandOf, droneSlots, droneYields, have, holdCapacity, holdUsed, maxQueue,
+  AUTO_SELL_EVERY, GameState, canReach, currentMarket, demandOf, droneSlots, droneYields, have, holdCapacity, holdUsed, maxQueue,
   miningRate, priceAt, quoteSale, rank, title, travelTime,
 } from '../game/state';
 import { D, UpgradeRow, cr, perMin } from './common';
@@ -253,31 +253,74 @@ export function CraftPanel({ s, dispatch }: { s: GameState; dispatch: D }) {
 
 // ---------- Market ----------
 
-export function MarketPanel({ s, dispatch, onGalaxy }: { s: GameState; dispatch: D; onGalaxy: () => void }) {
-  const m = currentMarket(s);
-  if (!m) return <div className="card"><h2>💰 Market</h2><p className="muted">You're in transit. Markets open when you arrive.</p></div>;
-  const all = [...RESOURCE_IDS, ...ITEM_IDS] as GoodId[];
-  const sorted = [...all].sort((a, b) => Number(have(s, b) > 0) - Number(have(s, a) > 0));
+function AutoSellCard({ s, dispatch }: { s: GameState; dispatch: D }) {
+  const on = (Object.entries(s.autoSell) as [GoodId, { on: boolean }][]).filter(([, r]) => r?.on).map(([g]) => g);
   return (
     <div className="card">
-      <h2>👑 {m.name}</h2>
-      <p className="muted small">Pays {Math.round((m.market!.priceMult - 1) * 100)}% extra here. ⭐ = this market loves it (+40%). Prices drop as you flood the market and recover over time. Other systems pay different prices. <button className="link" onClick={onGalaxy}>Galaxy map</button></p>
-      {sorted.map((g) => {
-        const n = have(s, g);
-        const liked = m.market!.likes.includes(g);
-        return (
-          <div key={g} className={`market-row${n ? '' : ' dim'}`}>
-            <div>
-              <b>{GOODS[g].icon} {GOODS[g].name}{liked ? ' ⭐' : ''}</b> <small className="muted">have {n}</small>
-              <div className="small muted">{priceAt(s, m, g)} cr each · demand {Math.round(demandOf(s, m, g) * 100)}%</div>
+      <h2>🤖 Auto-sell <small>{on.length ? `${on.length} item${on.length > 1 ? 's' : ''} on` : 'off'}</small></h2>
+      <p className="small muted">
+        Your Trade Computer sells for you every {AUTO_SELL_EVERY}s, even while you're away, at whichever market your mothership is parked at.
+        Set a "keep" amount on anything you need for crafting or upgrades. It pauses while you travel.
+      </p>
+      <div className="row wrap">
+        <button onClick={() => dispatch({ type: 'setAutoSellGroup', goods: RESOURCE_IDS, on: true })}>All raw resources on</button>
+        <button onClick={() => dispatch({ type: 'setAutoSellGroup', goods: ITEM_IDS, on: true })}>All crafted items on</button>
+        <button disabled={!on.length} onClick={() => dispatch({ type: 'setAutoSellGroup', goods: [...RESOURCE_IDS, ...ITEM_IDS], on: false })}>Turn all off</button>
+      </div>
+      {s.autoReport.units > 0 && <p className="small ok">This minute so far: {s.autoReport.units.toLocaleString()} sold for {cr(s.autoReport.credits)}</p>}
+    </div>
+  );
+}
+
+export function MarketPanel({ s, dispatch, onGalaxy }: { s: GameState; dispatch: D; onGalaxy: () => void }) {
+  const m = currentMarket(s);
+  if (!m) {
+    return (
+      <div className="stack">
+        <div className="card"><h2>💰 Market</h2><p className="muted">You're in transit. Markets open (and auto-sell resumes) when you arrive.</p></div>
+        <AutoSellCard s={s} dispatch={dispatch} />
+      </div>
+    );
+  }
+  const all = [...RESOURCE_IDS, ...ITEM_IDS] as GoodId[];
+  const score = (g: GoodId) => (have(s, g) > 0 ? 2 : 0) + (s.autoSell[g]?.on ? 1 : 0);
+  const sorted = [...all].sort((a, b) => score(b) - score(a));
+  return (
+    <div className="stack">
+      <AutoSellCard s={s} dispatch={dispatch} />
+      <div className="card">
+        <h2>👑 {m.name}</h2>
+        <p className="muted small">Pays {Math.round((m.market!.priceMult - 1) * 100)}% extra here. ⭐ = this market loves it (+40%). Prices drop as you flood the market and recover over time. Other systems pay different prices. <button className="link" onClick={onGalaxy}>Galaxy map</button></p>
+        {sorted.map((g) => {
+          const n = have(s, g);
+          const liked = m.market!.likes.includes(g);
+          const rule = s.autoSell[g];
+          return (
+            <div key={g} className={`market-row${n || rule?.on ? '' : ' dim'}`}>
+              <div className="market-info">
+                <b>{GOODS[g].icon} {GOODS[g].name}{liked ? ' ⭐' : ''}</b> <small className="muted">have {n}</small>
+                <div className="small muted">{priceAt(s, m, g)} cr each · demand {Math.round(demandOf(s, m, g) * 100)}%</div>
+                <div className="auto-row">
+                  <label className="switch">
+                    <input type="checkbox" checked={!!rule?.on} onChange={(e) => dispatch({ type: 'setAutoSell', good: g, on: e.target.checked })} />
+                    <span>Auto-sell</span>
+                  </label>
+                  {rule?.on && (
+                    <label className="keep small muted">keep
+                      <input type="number" inputMode="numeric" min={0} step={1} value={rule.keep}
+                        onChange={(e) => dispatch({ type: 'setAutoSell', good: g, keep: Number(e.target.value) })} aria-label={`Keep how many ${GOODS[g].name}`} />
+                    </label>
+                  )}
+                </div>
+              </div>
+              <div className="btns">
+                <button disabled={n < 1} onClick={() => dispatch({ type: 'sell', good: g, qty: 1 })}>Sell 1</button>
+                <button disabled={n < 1} onClick={() => dispatch({ type: 'sell', good: g, qty: n })}>All{n ? ` · ${cr(quoteSale(s, m, g, n))}` : ''}</button>
+              </div>
             </div>
-            <div className="btns">
-              <button disabled={n < 1} onClick={() => dispatch({ type: 'sell', good: g, qty: 1 })}>Sell 1</button>
-              <button disabled={n < 1} onClick={() => dispatch({ type: 'sell', good: g, qty: n })}>All{n ? ` · ${cr(quoteSale(s, m, g, n))}` : ''}</button>
-            </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
