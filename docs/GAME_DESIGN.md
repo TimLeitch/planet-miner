@@ -223,6 +223,18 @@ Main screens (PROPOSED). Each one needs a phone layout and a desktop layout:
 4. **Content expansion:** more systems, ships, recipes, story chapters.
 5. **Polish and alpha:** balance, art pass, playtesting.
 
+## 15A. What the prototype has today (2026-11-08)
+
+Built at Tim's request so players can "really experiment" in the browser:
+
+- **100 places:** 10 star systems (tiers 1 to 10), each with 9 minable planets and 1 Kingdom market. Systems are unlocked by Engines level and reached by travelling (takes time).
+- **Mothership (click your ship on the map):** 6 modules with levels: Engines (1-10, unlock systems and travel faster), Cargo Hold (1-10), Drone Bay (1-8, drone slots), Fabricator (1-6, queue size and speed), Survey Scanner (1-6, mining bonus), Trade Computer (1-6, sell bonus). Upgrades cost credits plus crafted parts.
+- **Drone Bay:** every drone has its own name, assignment and upgrades: Drill (1-10, mining speed), Hull (0-5, lets it land on hazardous planets), Extractor (0-2, mines Rare then Legendary resources).
+- **Goods:** 10 resources in 4 rarities (Common to Legendary, appearing in later systems) and 12 crafted items.
+- **Markets:** each system's market pays a different bonus and "loves" three items (+40%). Flooding a market drops its price; it recovers over time.
+- **Rank 1 to 100** from lifetime sales, with funny titles every 10 ranks (Convict → Royal Pain).
+- Local save in the browser with up to 8 hours of offline mining.
+
 ## 16. Open questions summary
 
 1. Target audience and session length (§1)

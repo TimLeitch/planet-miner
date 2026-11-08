@@ -1,40 +1,48 @@
 import {
-  DECREES, DEMAND_DROP_PER_UNIT, DEMAND_FLOOR, DEMAND_RECOVERY_PER_SEC, GOODS, GoodId,
-  HOLD_BASE, HOLD_STEP, MAX_DRILL_LEVEL, OFFLINE_CAP_SECONDS, PLANETS, RECIPES, ItemId,
-  SHIP_COST, SHIP_NAME, STARTING_CREDITS, STARTING_DEBT, drillUpgradeCost, holdUpgradeCost,
+  BASE_TRAVEL_SECONDS, DECREES, DEMAND_DROP_PER_UNIT, DEMAND_FLOOR, DEMAND_RECOVERY_PER_SEC, DRONE_NAME,
+  DRONE_UPGRADES, DroneStat, EXTRACTOR_NEEDED, GOODS, GoodId, ItemId, LIKED_MULT, MODULES, ModuleId,
+  OFFLINE_CAP_SECONDS, Parts, PlanetDef, RECIPES, ResourceId, STARTING_CREDITS, STARTING_DEBT, SYSTEMS,
+  droneCost, droneSlotsAt, fabQueueAt, fabSpeedAt, holdCapacityAt, planetById, rankFor, rankTitle,
+  scannerBonusAt, systemById, tradeBonusAt, travelSpeedAt, upgradeCost,
 } from './data';
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
-export interface Ship {
+export interface Drone {
   id: number;
-  planetId: string | null; // null = docked in the mothership hangar
+  name: string;
+  planetId: string | null; // null = parked in the Drone Bay
   drill: number;
+  hull: number;
+  extractor: number;
 }
 
-export interface CraftJob {
-  recipe: ItemId;
-  remaining: number; // seconds
-}
+export interface CraftJob { recipe: ItemId; remaining: number }
+
+export interface Travel { to: string; remaining: number; total: number }
 
 export interface GameState {
   version: number;
   credits: number;
   debt: number;
   freed: boolean;
+  earned: number; // lifetime sales, drives rank
+  location: string; // system id
+  travel: Travel | null;
+  visited: string[];
+  modules: Record<ModuleId, number>;
   ownedPlanets: string[];
-  ships: Ship[];
-  nextShipId: number;
+  drones: Drone[];
+  nextDroneId: number;
   hold: Partial<Record<GoodId, number>>;
-  holdLevel: number;
   craftQueue: CraftJob[];
-  demand: Partial<Record<GoodId, number>>;
+  demand: Record<string, number>; // `${marketPlanetId}:${good}`
   log: string[];
   lastTick: number;
-  decreeIn: number; // seconds until next royal decree
+  decreeIn: number;
 }
 
-export const MAX_QUEUE = 3;
+const DRONE_NAMES = ['Digby', 'Rocky', 'Sir Drills-a-Lot', 'Pebbles', 'Scoop', 'Gravel Gus', 'Dusty', 'Bort', 'Clanky', 'Molly Mole'];
 
 export function newGame(now: number): GameState {
   return {
@@ -42,11 +50,15 @@ export function newGame(now: number): GameState {
     credits: STARTING_CREDITS,
     debt: STARTING_DEBT,
     freed: false,
+    earned: 0,
+    location: 's1',
+    travel: null,
+    visited: ['s1'],
+    modules: { engines: 1, hold: 1, hangar: 1, fabricator: 1, scanner: 1, trade: 1 },
     ownedPlanets: [],
-    ships: [{ id: 1, planetId: null, drill: 1 }],
-    nextShipId: 2,
+    drones: [{ id: 1, name: DRONE_NAMES[0], planetId: null, drill: 1, hull: 0, extractor: 0 }],
+    nextDroneId: 2,
     hold: {},
-    holdLevel: 1,
     craftQueue: [],
     demand: {},
     log: [
@@ -58,75 +70,93 @@ export function newGame(now: number): GameState {
   };
 }
 
-// ---------- helpers ----------
+// ---------- derived values ----------
 
-export function holdCapacity(s: GameState): number {
-  return HOLD_BASE + HOLD_STEP * (s.holdLevel - 1);
-}
+export const holdCapacity = (s: GameState) => holdCapacityAt(s.modules.hold);
+export const droneSlots = (s: GameState) => droneSlotsAt(s.modules.hangar);
+export const maxQueue = (s: GameState) => fabQueueAt(s.modules.fabricator);
+export const rank = (s: GameState) => rankFor(s.earned);
+export const title = (s: GameState) => rankTitle(rank(s));
+export const canReach = (s: GameState, systemId: string) => systemById(systemId).tier <= s.modules.engines;
 
 export function holdUsed(s: GameState): number {
   return Object.values(s.hold).reduce((a, b) => a + (b ?? 0), 0);
 }
+export const have = (s: GameState, g: GoodId) => Math.floor((s.hold[g] ?? 0) + 1e-9);
 
-export function have(s: GameState, g: GoodId): number {
-  return Math.floor(s.hold[g] ?? 0);
+/** Market planet in the system the mothership is parked at (null while travelling). */
+export function currentMarket(s: GameState): PlanetDef | null {
+  if (s.travel) return null;
+  return (planetById(s.location === 's1' ? 'crown' : `${s.location}m`) ?? null);
 }
 
-export function demandOf(s: GameState, g: GoodId): number {
-  return s.demand[g] ?? 1;
+const dkey = (m: PlanetDef, g: GoodId) => `${m.id}:${g}`;
+export const demandOf = (s: GameState, m: PlanetDef, g: GoodId) => s.demand[dkey(m, g)] ?? 1;
+
+export function priceAt(s: GameState, m: PlanetDef, g: GoodId, demand = demandOf(s, m, g)): number {
+  const liked = m.market?.likes.includes(g) ? LIKED_MULT : 1;
+  const mult = (m.market?.priceMult ?? 1) * liked * tradeBonusAt(s.modules.trade);
+  return Math.max(1, Math.round(GOODS[g].basePrice * mult * demand));
 }
 
-export function unitPrice(s: GameState, g: GoodId): number {
-  return Math.max(1, Math.round(GOODS[g].basePrice * demandOf(s, g)));
-}
-
-/** Total credits for selling `qty` units, with price dropping per unit. */
-export function quoteSale(s: GameState, g: GoodId, qty: number): number {
-  let d = demandOf(s, g);
+export function quoteSale(s: GameState, m: PlanetDef, g: GoodId, qty: number): number {
+  let d = demandOf(s, m, g);
   let total = 0;
   for (let i = 0; i < qty; i++) {
-    total += Math.max(1, Math.round(GOODS[g].basePrice * d));
+    total += priceAt(s, m, g, d);
     d = Math.max(DEMAND_FLOOR, d - DEMAND_DROP_PER_UNIT);
   }
   return total;
 }
 
+/** Which resources a drone can actually pull from a planet. */
+export function droneYields(s: GameState, d: Drone, p: PlanetDef): Partial<Record<ResourceId, number>> {
+  const out: Partial<Record<ResourceId, number>> = {};
+  if (d.hull < p.hazard) return out;
+  for (const [g, r] of Object.entries(p.yields) as [ResourceId, number][]) {
+    if (d.extractor >= EXTRACTOR_NEEDED[GOODS[g].rarity!]) out[g] = r * d.drill * scannerBonusAt(s.modules.scanner);
+  }
+  return out;
+}
+
 export function miningRate(s: GameState): Partial<Record<GoodId, number>> {
   const rate: Partial<Record<GoodId, number>> = {};
-  for (const ship of s.ships) {
-    if (!ship.planetId) continue;
-    const p = PLANETS.find((x) => x.id === ship.planetId);
+  for (const d of s.drones) {
+    const p = planetById(d.planetId);
     if (!p) continue;
-    for (const [g, r] of Object.entries(p.yields) as [GoodId, number][]) {
-      rate[g] = (rate[g] ?? 0) + r * ship.drill;
-    }
+    for (const [g, r] of Object.entries(droneYields(s, d, p)) as [GoodId, number][]) rate[g] = (rate[g] ?? 0) + r;
   }
   return rate;
 }
 
-function canAfford(s: GameState, credits: number, parts: Partial<Record<GoodId, number>>): boolean {
+export function canAfford(s: GameState, credits: number, parts: Parts): boolean {
   if (s.credits < credits) return false;
   return (Object.entries(parts) as [GoodId, number][]).every(([g, n]) => have(s, g) >= n);
 }
 
-function spend(s: GameState, credits: number, parts: Partial<Record<GoodId, number>>) {
+function spend(s: GameState, credits: number, parts: Parts) {
   s.credits -= credits;
   for (const [g, n] of Object.entries(parts) as [GoodId, number][]) s.hold[g] = (s.hold[g] ?? 0) - n;
 }
 
 function addLog(s: GameState, msg: string) {
-  s.log = [msg, ...s.log].slice(0, 30);
+  s.log = [msg, ...s.log].slice(0, 40);
 }
+
+export const travelTime = (s: GameState, to: string) =>
+  (BASE_TRAVEL_SECONDS * Math.max(1, Math.abs(systemById(to).tier - systemById(s.location).tier))) / travelSpeedAt(s.modules.engines);
 
 // ---------- actions ----------
 
 export type Action =
   | { type: 'tick'; now: number }
+  | { type: 'travel'; to: string }
   | { type: 'buyPlanet'; planetId: string }
-  | { type: 'buyShip' }
-  | { type: 'deploy'; shipId: number; planetId: string | null }
-  | { type: 'upgradeDrill'; shipId: number }
-  | { type: 'upgradeHold' }
+  | { type: 'buyDrone' }
+  | { type: 'renameDrone'; droneId: number; name: string }
+  | { type: 'deploy'; droneId: number; planetId: string | null }
+  | { type: 'upgradeDrone'; droneId: number; stat: DroneStat }
+  | { type: 'upgradeModule'; module: ModuleId }
   | { type: 'craft'; recipe: ItemId }
   | { type: 'sell'; good: GoodId; qty: number }
   | { type: 'payDebt'; amount: number }
@@ -141,76 +171,105 @@ export function reduce(prev: GameState, a: Action): GameState {
       tick(s, a.now);
       return s;
 
+    case 'travel': {
+      if (s.travel || a.to === s.location || !SYSTEMS.some((x) => x.id === a.to) || !canReach(s, a.to)) return prev;
+      const t = travelTime(s, a.to);
+      s.travel = { to: a.to, remaining: t, total: t };
+      addLog(s, `Mothership departing for ${systemById(a.to).name}. ETA ${Math.ceil(t)}s.`);
+      return s;
+    }
+
     case 'buyPlanet': {
-      const p = PLANETS.find((x) => x.id === a.planetId);
+      const p = planetById(a.planetId);
       if (!p || p.market || s.ownedPlanets.includes(p.id) || s.credits < p.rightsPrice) return prev;
+      if (s.travel || p.systemId !== s.location) return prev; // must be parked in that system
       s.credits -= p.rightsPrice;
       s.ownedPlanets.push(p.id);
       addLog(s, `Mining rights to ${p.name} purchased. The Crown says "thank you" (reluctantly).`);
       return s;
     }
 
-    case 'buyShip': {
-      if (s.credits < shipCost(s)) return prev;
-      s.credits -= shipCost(s);
-      s.ships.push({ id: s.nextShipId, planetId: null, drill: 1 });
-      addLog(s, `New ${SHIP_NAME} #${s.nextShipId} delivered to the hangar.`);
-      s.nextShipId++;
+    case 'buyDrone': {
+      const cost = droneCost(s.drones.length);
+      if (s.drones.length >= droneSlots(s) || s.credits < cost) return prev;
+      s.credits -= cost;
+      const name = DRONE_NAMES[(s.nextDroneId - 1) % DRONE_NAMES.length] + (s.nextDroneId > DRONE_NAMES.length ? ` ${Math.ceil(s.nextDroneId / DRONE_NAMES.length)}` : '');
+      s.drones.push({ id: s.nextDroneId, name, planetId: null, drill: 1, hull: 0, extractor: 0 });
+      addLog(s, `New ${DRONE_NAME} "${name}" delivered to the Drone Bay.`);
+      s.nextDroneId++;
+      return s;
+    }
+
+    case 'renameDrone': {
+      const d = s.drones.find((x) => x.id === a.droneId);
+      const name = a.name.trim().slice(0, 24);
+      if (!d || !name) return prev;
+      d.name = name;
       return s;
     }
 
     case 'deploy': {
-      const ship = s.ships.find((x) => x.id === a.shipId);
-      if (!ship) return prev;
-      if (a.planetId && !s.ownedPlanets.includes(a.planetId)) return prev;
-      ship.planetId = a.planetId;
-      const p = PLANETS.find((x) => x.id === a.planetId);
-      addLog(s, p ? `${SHIP_NAME} #${ship.id} is now drilling on ${p.name}.` : `${SHIP_NAME} #${ship.id} returned to the hangar.`);
+      const d = s.drones.find((x) => x.id === a.droneId);
+      if (!d) return prev;
+      if (a.planetId) {
+        const p = planetById(a.planetId);
+        if (!p || !s.ownedPlanets.includes(p.id) || d.hull < p.hazard) return prev;
+      }
+      d.planetId = a.planetId;
+      const p = planetById(a.planetId);
+      addLog(s, p ? `${d.name} is now drilling on ${p.name}.` : `${d.name} returned to the Drone Bay.`);
       return s;
     }
 
-    case 'upgradeDrill': {
-      const ship = s.ships.find((x) => x.id === a.shipId);
-      if (!ship || ship.drill >= MAX_DRILL_LEVEL) return prev;
-      const cost = drillUpgradeCost(ship.drill);
+    case 'upgradeDrone': {
+      const d = s.drones.find((x) => x.id === a.droneId);
+      const u = DRONE_UPGRADES[a.stat];
+      if (!d || !u || d[a.stat] >= u.max) return prev;
+      const cost = upgradeCost(u, d[a.stat]);
       if (!canAfford(s, cost.credits, cost.parts)) return prev;
       spend(s, cost.credits, cost.parts);
-      ship.drill++;
-      addLog(s, `${SHIP_NAME} #${ship.id} drill upgraded to level ${ship.drill}.`);
+      d[a.stat]++;
+      addLog(s, `${d.name}: ${u.name} upgraded to level ${d[a.stat]}.`);
       return s;
     }
 
-    case 'upgradeHold': {
-      const cost = holdUpgradeCost(s.holdLevel);
-      if (s.credits < cost) return prev;
-      s.credits -= cost;
-      s.holdLevel++;
-      addLog(s, `Cargo hold expanded to ${holdCapacity(s)} units.`);
+    case 'upgradeModule': {
+      const u = MODULES[a.module];
+      const lvl = s.modules[a.module];
+      if (!u || lvl >= u.max) return prev;
+      const cost = upgradeCost(u, lvl);
+      if (!canAfford(s, cost.credits, cost.parts)) return prev;
+      spend(s, cost.credits, cost.parts);
+      s.modules[a.module]++;
+      addLog(s, `Mothership ${u.name} upgraded to level ${lvl + 1}: ${u.effect(lvl + 1)}.`);
       return s;
     }
 
     case 'craft': {
       const r = RECIPES.find((x) => x.id === a.recipe);
-      if (!r || s.craftQueue.length >= MAX_QUEUE) return prev;
-      if (!canAfford(s, 0, r.inputs)) return prev;
+      if (!r || s.craftQueue.length >= maxQueue(s) || !canAfford(s, 0, r.inputs)) return prev;
       spend(s, 0, r.inputs);
       s.craftQueue.push({ recipe: r.id, remaining: r.seconds });
       return s;
     }
 
     case 'sell': {
+      const m = currentMarket(s);
       const qty = Math.min(Math.floor(a.qty), have(s, a.good));
-      if (qty <= 0) return prev;
-      const earned = quoteSale(s, a.good, qty);
+      if (!m || qty <= 0) return prev;
+      const earned = quoteSale(s, m, a.good, qty);
+      const before = rank(s);
       s.credits += earned;
+      s.earned += earned;
       s.hold[a.good] = (s.hold[a.good] ?? 0) - qty;
-      s.demand[a.good] = Math.max(DEMAND_FLOOR, demandOf(s, a.good) - DEMAND_DROP_PER_UNIT * qty);
-      addLog(s, `Sold ${qty} ${GOODS[a.good].name} for ${earned.toLocaleString()} cr.`);
+      s.demand[dkey(m, a.good)] = Math.max(DEMAND_FLOOR, demandOf(s, m, a.good) - DEMAND_DROP_PER_UNIT * qty);
+      addLog(s, `Sold ${qty} ${GOODS[a.good].name} at ${m.name} for ${earned.toLocaleString()} cr.`);
+      if (rank(s) > before) addLog(s, `⭐ Rank up! You are now rank ${rank(s)}: ${title(s)}.`);
       return s;
     }
 
     case 'payDebt': {
-      const amt = Math.min(Math.floor(a.amount), s.credits, s.debt);
+      const amt = Math.min(Math.floor(a.amount), Math.floor(s.credits), s.debt);
       if (amt <= 0) return prev;
       s.credits -= amt;
       s.debt -= amt;
@@ -222,10 +281,6 @@ export function reduce(prev: GameState, a: Action): GameState {
       return s;
     }
   }
-}
-
-export function shipCost(s: GameState): number {
-  return Math.round(SHIP_COST * Math.pow(1.8, s.ships.length - 1));
 }
 
 /** Advance the simulation to `now`. Mutates `s`. Offline time is capped. */
@@ -241,13 +296,11 @@ export function tick(s: GameState, now: number) {
   if (totalRate > 0) {
     const space = Math.max(0, holdCapacity(s) - holdUsed(s));
     const scale = Math.min(1, space / (totalRate * dt));
-    for (const [g, r] of Object.entries(rate) as [GoodId, number][]) {
-      s.hold[g] = (s.hold[g] ?? 0) + r * dt * scale;
-    }
+    for (const [g, r] of Object.entries(rate) as [GoodId, number][]) s.hold[g] = (s.hold[g] ?? 0) + r * dt * scale;
   }
 
-  // Crafting queue, runs one job at a time
-  let t = dt;
+  // Crafting queue, one job at a time
+  let t = dt * fabSpeedAt(s.modules.fabricator);
   while (t > 0 && s.craftQueue.length) {
     const job = s.craftQueue[0];
     const used = Math.min(t, job.remaining);
@@ -259,12 +312,23 @@ export function tick(s: GameState, now: number) {
     }
   }
 
-  // Market demand recovers
-  for (const g of Object.keys(s.demand) as GoodId[]) {
-    s.demand[g] = Math.min(1, demandOf(s, g) + DEMAND_RECOVERY_PER_SEC * dt);
+  // Travel
+  if (s.travel) {
+    s.travel.remaining -= dt;
+    if (s.travel.remaining <= 0) {
+      s.location = s.travel.to;
+      s.travel = null;
+      const sys = systemById(s.location);
+      const first = !s.visited.includes(sys.id);
+      if (first) s.visited.push(sys.id);
+      addLog(s, `Arrived at ${sys.name}.${first ? ' New system discovered!' : ''}`);
+    }
   }
 
-  // Funny royal decrees
+  // Market demand recovers
+  for (const k of Object.keys(s.demand)) s.demand[k] = Math.min(1, s.demand[k] + DEMAND_RECOVERY_PER_SEC * dt);
+
+  // Royal decrees
   s.decreeIn -= dt;
   if (s.decreeIn <= 0) {
     addLog(s, DECREES[Math.floor(Math.random() * DECREES.length)]);
@@ -272,16 +336,45 @@ export function tick(s: GameState, now: number) {
   }
 }
 
-// ---------- local save (Firebase cloud saves come in milestone 2) ----------
+// ---------- saves (local for now; Firebase cloud saves come in milestone 2) ----------
 
 const SAVE_KEY = 'planet-miner-save';
+
+interface V1Save {
+  version: 1; credits: number; debt: number; freed: boolean; ownedPlanets: string[];
+  ships: { id: number; planetId: string | null; drill: number }[]; nextShipId: number;
+  hold: Partial<Record<GoodId, number>>; holdLevel: number; craftQueue: CraftJob[];
+  demand: Partial<Record<GoodId, number>>; log: string[]; lastTick: number; decreeIn: number;
+}
+
+export function migrate(raw: unknown, now: number): GameState | null {
+  const v = raw as { version?: number };
+  if (v?.version === SAVE_VERSION) return raw as GameState;
+  if (v?.version === 1) {
+    const o = raw as V1Save;
+    const s = newGame(o.lastTick ?? now);
+    Object.assign(s, {
+      credits: o.credits, debt: o.debt, freed: o.freed, ownedPlanets: o.ownedPlanets, hold: o.hold,
+      craftQueue: o.craftQueue, log: ['🚀 The galaxy just got a lot bigger! Check the Galaxy map.', ...o.log].slice(0, 40),
+      lastTick: o.lastTick, decreeIn: o.decreeIn, nextDroneId: o.nextShipId,
+    });
+    s.modules.hold = Math.min(10, o.holdLevel);
+    s.drones = o.ships.map((sh, i) => ({
+      id: sh.id, name: DRONE_NAMES[i % DRONE_NAMES.length], planetId: sh.planetId, drill: sh.drill, hull: 0, extractor: 0,
+    }));
+    s.modules.hangar = Math.min(8, Math.max(1, s.drones.length - 1));
+    for (const [g, d] of Object.entries(o.demand ?? {})) s.demand[`crown:${g}`] = d as number;
+    return s;
+  }
+  return null;
+}
 
 export function loadGame(now: number): GameState {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     if (raw) {
-      const s = JSON.parse(raw) as GameState;
-      if (s.version === SAVE_VERSION) {
+      const s = migrate(JSON.parse(raw), now);
+      if (s) {
         const before = { ...s.hold };
         tick(s, now);
         const gained = (Object.keys(s.hold) as GoodId[])

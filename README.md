@@ -2,7 +2,7 @@
 
 A browser-based space mining and trading game. You command a large mothership, travel to star systems, buy planets, send down mining ships to pull resources, craft goods, and sell or supply them to planets that need them. Progress is tied to your account and saved to the cloud, so you can pick up where you left off on any device.
 
-> Status: **Prototype.** A first playable build (one system, buy planets, mine, craft, sell, pay off your debt) runs in the browser with a local save. Accounts and cloud saves are next. See [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md) for the full design.
+> Status: **Prototype.** Playable in the browser with a local save: 10 star systems and 100 places to explore, a Mothership with 6 upgradable modules, a Drone Bay with per-drone upgrades, 22 resources and goods, 12 recipes, and ranks 1 to 100. Accounts and cloud saves are next.
 
 ## Core loop
 
@@ -51,9 +51,10 @@ planet-miner/
 │   └── GAME_DESIGN.md     # Full game design document
 ├── index.html             # App entry
 ├── src/
-│   ├── App.tsx            # UI: map, planet, fleet, craft, market, kingdom panels
+│   ├── App.tsx            # Layout, tabs, map/galaxy toggle
+│   ├── ui/                # Maps (system + galaxy) and panels (Explore, Ship, Drones, Craft, Market, Kingdom)
 │   └── game/
-│       ├── data.ts        # Balance data: planets, resources, recipes, prices
+│       ├── data.ts        # Balance data: systems, 100 planets, goods, recipes, upgrades, ranks
 │       └── state.ts       # Game rules (pure reducer), tick, local save
 └── functions/             # Firebase Cloud Functions (coming in milestone 2)
 ```
@@ -78,6 +79,7 @@ The prototype saves to your browser's local storage. Firebase sign-in and cloud 
 - [ ] Finish and sign off the game design doc
 - [x] Pick the tech stack (Firebase)
 - [x] Prototype: buy planets, mine, craft, sell, pay off the debt (local save)
+- [x] 100 places across 10 star systems, Mothership modules, Drone Bay upgrades, rank 1-100
 - [ ] Accounts and cloud saves
 - [ ] Crafting system and planet economies
 - [ ] Story campaign, chapter 1
