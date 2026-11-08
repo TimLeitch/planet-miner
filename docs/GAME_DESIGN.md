@@ -183,7 +183,7 @@ Main screens (PROPOSED). Each one needs a phone layout and a desktop layout:
 
 ### 12.2 Stack (decided: Firebase, Tim already has it)
 
-- **Client:** TypeScript + Phaser 3 for the game view, React for menus and panels, built with Vite (PROPOSED)
+- **Client:** TypeScript + React built with Vite. The prototype draws the star map in SVG, which keeps it light and sharp on phones; Phaser can be added later if we want animated ship flights and effects.
 - **Auth:** Firebase Authentication (email/password plus Google sign-in to start)
 - **Cloud saves and data:** Cloud Firestore
 - **Server logic:** Cloud Functions for anything the browser must not be trusted with: buying planets, selling goods, crafting results, offline progress, contract payouts

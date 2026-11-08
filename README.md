@@ -2,7 +2,7 @@
 
 A browser-based space mining and trading game. You command a large mothership, travel to star systems, buy planets, send down mining ships to pull resources, craft goods, and sell or supply them to planets that need them. Progress is tied to your account and saved to the cloud, so you can pick up where you left off on any device.
 
-> Status: **Design phase.** No game code yet. See [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md) for the full design.
+> Status: **Prototype.** A first playable build (one system, buy planets, mine, craft, sell, pay off your debt) runs in the browser with a local save. Accounts and cloud saves are next. See [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md) for the full design.
 
 ## Core loop
 
@@ -34,8 +34,7 @@ You're an ex-convict sent out to mine the Kingdom's planets. Every planet belong
 
 | Layer | Choice |
 |---|---|
-| Game client | TypeScript + Phaser 3, built with Vite |
-| UI (menus, inventory, crafting) | React overlay on top of the game canvas |
+| Game client | TypeScript + React, built with Vite (SVG star map; Phaser can be added later for richer visuals) |
 | Auth | Firebase Authentication |
 | Cloud saves and data | Cloud Firestore |
 | Server logic (purchases, selling, offline progress) | Cloud Functions |
@@ -50,25 +49,35 @@ planet-miner/
 ├── README.md
 ├── docs/
 │   └── GAME_DESIGN.md     # Full game design document
-├── client/                # Browser game (coming later)
-├── server/                # API / functions (coming later)
-└── shared/                # Shared types, balance data (coming later)
+├── index.html             # App entry
+├── src/
+│   ├── App.tsx            # UI: map, planet, fleet, craft, market, kingdom panels
+│   └── game/
+│       ├── data.ts        # Balance data: planets, resources, recipes, prices
+│       └── state.ts       # Game rules (pure reducer), tick, local save
+└── functions/             # Firebase Cloud Functions (coming in milestone 2)
 ```
 
 ## Getting started
 
-Nothing to run yet. Once the stack is chosen this section will cover:
+Requires Node 20+ and npm.
 
-- Prerequisites (Node version, Firebase CLI)
-- Firebase project config and environment variables
-- `npm install` / `npm run dev`
-- Running tests
+```bash
+npm install
+npm run dev        # local dev server at http://localhost:5173 (add --host to test on your phone over Wi-Fi)
+npm test           # game logic tests
+npm run build      # production build into dist/
+```
+
+Every push to `main` runs the tests, builds, and deploys to GitHub Pages: https://timleitch.github.io/planet-miner/
+
+The prototype saves to your browser's local storage. Firebase sign-in and cloud saves come in milestone 2.
 
 ## Roadmap
 
 - [ ] Finish and sign off the game design doc
 - [x] Pick the tech stack (Firebase)
-- [ ] Prototype: fly, buy one planet, mine one resource, sell it
+- [x] Prototype: buy planets, mine, craft, sell, pay off the debt (local save)
 - [ ] Accounts and cloud saves
 - [ ] Crafting system and planet economies
 - [ ] Story campaign, chapter 1
