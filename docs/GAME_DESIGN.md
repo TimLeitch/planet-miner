@@ -12,7 +12,12 @@ Items marked **OPEN** need a decision from Tim. Items marked **PROPOSED** are de
 
 **Genre:** Space management and trading game with idle/incremental elements.
 
-**Platform:** Desktop web browser first. Mobile browser as a stretch goal.
+**Platform:** Desktop and mobile web browsers are **both first-class** (decided, Tim 2026-11-08). Every screen must work with mouse and keyboard and with touch, in landscape and portrait.
+- UI scales from phone width (~360px) up to large desktop monitors
+- Tap targets at least 44px; no hover-only interactions
+- Short sessions on a phone (collect, sell, queue crafting) must be just as easy as long sessions on desktop
+- Same account and cloud save across devices
+- Installable as a PWA (add to home screen) is a PROPOSED extra
 
 **Audience:** **OPEN.** Casual players who like progression and trading games (e.g. a 15 to 30 minute session), or deeper strategy players who play for hours?
 
@@ -137,7 +142,7 @@ PROPOSED tiers (names are placeholders):
 
 ## 11. User interface
 
-Main screens (PROPOSED):
+Main screens (PROPOSED). Each one needs a phone layout and a desktop layout:
 1. **Galaxy map:** systems, routes, travel
 2. **System view:** planets in orbit, buy and deploy
 3. **Planet view:** deposits, active ships, hazards, market

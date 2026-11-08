@@ -22,7 +22,8 @@ A browser-based space mining and trading game. You command a large mothership, t
 - Crafting tree that turns raw resources into tradeable and buildable goods
 - Planet economies with supply, demand, and contracts
 - A story campaign that unfolds as you expand
-- User accounts with cloud saves (play on any browser)
+- Plays on desktop and mobile browsers, with touch and mouse controls
+- User accounts with cloud saves (pick up on any device)
 
 ## Story in one line
 
