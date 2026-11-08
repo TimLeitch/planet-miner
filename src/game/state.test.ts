@@ -209,3 +209,45 @@ describe('auto-sell', () => {
     expect(have(s, 'iron')).toBe(50);
   });
 });
+
+describe('auto-craft', () => {
+  it('keeps the fabricator busy and stops at the target', () => {
+    let s: GameState = { ...newGame(T0), hold: { iron: 30, carbon: 10 } };
+    s = reduce(s, { type: 'setAutoCraft', recipe: 'steel', on: true, target: 4 });
+    expect(s.craftQueue).toHaveLength(3); // queued straight away
+    s = at(s, 60);
+    expect(have(s, 'steel')).toBe(4);
+    expect(have(s, 'iron')).toBe(18);
+    expect(s.craftQueue).toHaveLength(0);
+  });
+
+  it('works offline in steps and feeds auto-sell', () => {
+    let s: GameState = { ...newGame(T0), credits: 1000 };
+    s = reduce(s, { type: 'buyPlanet', planetId: 'frostbite' });
+    s = reduce(s, { type: 'deploy', droneId: 1, planetId: 'frostbite' });
+    expect(s.drones[0].planetId).toBe('frostbite');
+    s = reduce(s, { type: 'setAutoCraft', recipe: 'water', on: true });
+    s = reduce(s, { type: 'setAutoSellGroup', goods: ['water', 'silica'], on: true });
+    s = at(s, 3600); // an hour away
+    expect(s.earned).toBeGreaterThan(0);
+    expect(have(s, 'water')).toBe(0);
+    expect(have(s, 'ice')).toBeLessThan(10); // ice was turned into water, not left piling up
+  });
+
+  it('does not use materials reserved by an auto-sell keep amount', () => {
+    let s: GameState = { ...newGame(T0), hold: { steel: 5, circuit: 5 } };
+    s = reduce(s, { type: 'setAutoSell', good: 'steel', on: true, keep: 5 });
+    s = reduce(s, { type: 'setAutoCraft', recipe: 'machinePart', on: true });
+    expect(s.craftQueue).toHaveLength(0);
+    expect(have(s, 'steel')).toBe(5);
+  });
+
+  it('turning it off stops new jobs', () => {
+    let s: GameState = { ...newGame(T0), hold: { ice: 30 } };
+    s = reduce(s, { type: 'setAutoCraft', recipe: 'water', on: true });
+    s = reduce(s, { type: 'setAutoCraft', recipe: 'water', on: false });
+    s = at(s, 30);
+    expect(have(s, 'water')).toBe(3); // only the 3 already queued
+    expect(s.autoCraft.water).toEqual({ on: false, target: 0 });
+  });
+});

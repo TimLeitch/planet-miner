@@ -2,7 +2,7 @@
 
 A browser-based space mining and trading game. You command a large mothership, travel to star systems, buy planets, send down mining ships to pull resources, craft goods, and sell or supply them to planets that need them. Progress is tied to your account and saved to the cloud, so you can pick up where you left off on any device.
 
-> Status: **Prototype.** Playable in the browser with a local save: 10 star systems and 100 places to explore, a Mothership with 6 upgradable modules, a Drone Bay with per-drone upgrades, auto-sell, 22 resources and goods, 12 recipes, and ranks 1 to 100. Accounts and cloud saves are next.
+> Status: **Prototype.** Playable in the browser with a local save: 10 star systems and 100 places to explore, a Mothership with 6 upgradable modules, a Drone Bay with per-drone upgrades, auto-sell and auto-craft, 22 resources and goods, 12 recipes, and ranks 1 to 100. Accounts and cloud saves are next.
 
 ## Core loop
 

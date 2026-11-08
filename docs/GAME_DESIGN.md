@@ -233,6 +233,7 @@ Built at Tim's request so players can "really experiment" in the browser:
 - **Goods:** 10 resources in 4 rarities (Common to Legendary, appearing in later systems) and 12 crafted items.
 - **Markets:** each system's market pays a different bonus and "loves" three items (+40%). Flooding a market drops its price; it recovers over time.
 - **Auto-sell** (Tim, 2026-11-08): turn on auto-sell per item, with a "keep" amount so crafting/upgrade materials aren't sold. It sells every 5 seconds at the market where the mothership is parked, keeps working while the player is away (within the 8-hour offline cap), pauses during travel, and posts a summary to the log once a minute. Quick buttons turn it on for all raw resources or all crafted items.
+- **Auto-craft** (Tim, 2026-11-08): switch on any recipe and the Fabricator keeps it queued whenever there's a free slot and ingredients, online and offline. Optional "stop at" stock target (0 = no limit). Recipes take turns, and auto-craft never uses materials reserved by an auto-sell "keep" amount, so the two run side by side (e.g. mine ore → auto-craft steel → auto-sell steel). Offline time is simulated in 5-second steps so both keep up.
 - **Rank 1 to 100** from lifetime sales, with funny titles every 10 ranks (Convict → Royal Pain).
 - Local save in the browser with up to 8 hours of offline mining.
 

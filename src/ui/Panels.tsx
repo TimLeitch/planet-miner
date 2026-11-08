@@ -213,33 +213,58 @@ export function DronesPanel({ s, dispatch }: { s: GameState; dispatch: D }) {
 
 export function CraftPanel({ s, dispatch }: { s: GameState; dispatch: D }) {
   const q = maxQueue(s);
+  const autoOn = RECIPES.filter((r) => s.autoCraft[r.id]?.on);
   return (
     <div className="stack">
       <div className="card">
-        <h2>🛠️ Fabricator <small>Lv {s.modules.fabricator}</small></h2>
-        <p className="muted small">Queue up to {q} jobs. Ingredients are taken when you queue.</p>
+        <h2>🛠️ Fabricator <small>Lv {s.modules.fabricator} · {s.craftQueue.length}/{q} jobs</small></h2>
+        <p className="muted small">Ingredients are taken when a job is queued.</p>
         {s.craftQueue.length === 0 ? <p className="muted">Idle.</p> : s.craftQueue.map((j, i) => {
           const r = RECIPES.find((x) => x.id === j.recipe)!;
           return (
             <div key={i} className="job">
-              <span>{GOODS[j.recipe].icon} {GOODS[j.recipe].name}</span>
+              <span>{GOODS[j.recipe].icon} {GOODS[j.recipe].name}{s.autoCraft[j.recipe]?.on ? ' 🤖' : ''}</span>
               <div className="bar"><div style={{ width: `${i === 0 ? (1 - j.remaining / r.seconds) * 100 : 0}%` }} /></div>
             </div>
           );
         })}
       </div>
       <div className="card">
+        <h2>🤖 Auto-craft <small>{autoOn.length ? `${autoOn.length} recipe${autoOn.length > 1 ? 's' : ''} on` : 'off'}</small></h2>
+        <p className="small muted">
+          Switch on any recipe and the Fabricator keeps making it whenever it has a free slot and the ingredients, even while you're away.
+          Set "stop at" to only keep that many in stock (0 = no limit). It won't touch materials you've reserved with an auto-sell "keep" amount,
+          so you can auto-craft and auto-sell side by side.
+        </p>
+        <div className="row wrap">
+          <button disabled={!autoOn.length} onClick={() => autoOn.forEach((r) => dispatch({ type: 'setAutoCraft', recipe: r.id, on: false }))}>Turn all off</button>
+        </div>
+      </div>
+      <div className="card">
         <h3>Recipes</h3>
         {RECIPES.map((r) => {
           const ok = (Object.entries(r.inputs) as [GoodId, number][]).every(([g, n]) => have(s, g) >= n) && s.craftQueue.length < q;
+          const rule = s.autoCraft[r.id];
           return (
             <div key={r.id} className="recipe">
-              <div>
+              <div className="market-info">
                 <b>{GOODS[r.id].icon} {GOODS[r.id].name}</b> <small className="muted">{r.seconds}s · have {have(s, r.id)}</small>
                 <div className="small muted">
                   {(Object.entries(r.inputs) as [GoodId, number][]).map(([g, n]) => (
                     <span key={g} className={have(s, g) >= n ? '' : 'short'}>{n} {GOODS[g].icon} {GOODS[g].name} </span>
                   ))}
+                </div>
+                <div className="auto-row">
+                  <label className="switch">
+                    <input type="checkbox" checked={!!rule?.on} aria-label={`Auto-craft ${GOODS[r.id].name}`} onChange={(e) => dispatch({ type: 'setAutoCraft', recipe: r.id, on: e.target.checked })} />
+                    <span>Auto-craft</span>
+                  </label>
+                  {rule?.on && (
+                    <label className="keep small muted">stop at
+                      <input type="number" inputMode="numeric" min={0} step={1} value={rule.target}
+                        onChange={(e) => dispatch({ type: 'setAutoCraft', recipe: r.id, target: Number(e.target.value) })} aria-label={`Stop auto-crafting ${GOODS[r.id].name} at`} />
+                    </label>
+                  )}
                 </div>
               </div>
               <button disabled={!ok} onClick={() => dispatch({ type: 'craft', recipe: r.id })}>Craft</button>
@@ -260,7 +285,7 @@ function AutoSellCard({ s, dispatch }: { s: GameState; dispatch: D }) {
       <h2>🤖 Auto-sell <small>{on.length ? `${on.length} item${on.length > 1 ? 's' : ''} on` : 'off'}</small></h2>
       <p className="small muted">
         Your Trade Computer sells for you every {AUTO_SELL_EVERY}s, even while you're away, at whichever market your mothership is parked at.
-        Set a "keep" amount on anything you need for crafting or upgrades. It pauses while you travel.
+        Set a "keep" amount on anything you need for crafting or upgrades; auto-craft won't use it either. Pair it with auto-craft in the Craft tab to turn raw ore into pricier goods automatically. It pauses while you travel.
       </p>
       <div className="row wrap">
         <button onClick={() => dispatch({ type: 'setAutoSellGroup', goods: RESOURCE_IDS, on: true })}>All raw resources on</button>
@@ -302,7 +327,7 @@ export function MarketPanel({ s, dispatch, onGalaxy }: { s: GameState; dispatch:
                 <div className="small muted">{priceAt(s, m, g)} cr each · demand {Math.round(demandOf(s, m, g) * 100)}%</div>
                 <div className="auto-row">
                   <label className="switch">
-                    <input type="checkbox" checked={!!rule?.on} onChange={(e) => dispatch({ type: 'setAutoSell', good: g, on: e.target.checked })} />
+                    <input type="checkbox" checked={!!rule?.on} aria-label={`Auto-sell ${GOODS[g].name}`} onChange={(e) => dispatch({ type: 'setAutoSell', good: g, on: e.target.checked })} />
                     <span>Auto-sell</span>
                   </label>
                   {rule?.on && (

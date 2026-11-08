@@ -42,10 +42,13 @@ export interface GameState {
   decreeIn: number;
   autoSell: Partial<Record<GoodId, AutoRule>>;
   autoSellIn: number; // seconds until next auto-sell run
+  autoCraft: Partial<Record<ItemId, AutoCraftRule>>;
   autoReport: { units: number; credits: number; in: number }; // batched log line
 }
 
 export interface AutoRule { on: boolean; keep: number }
+/** Auto-craft: keep the Fabricator busy with this recipe until you hold `target` (0 = no limit). */
+export interface AutoCraftRule { on: boolean; target: number }
 export const AUTO_SELL_EVERY = 5;
 const AUTO_REPORT_EVERY = 60;
 
@@ -76,6 +79,7 @@ export function newGame(now: number): GameState {
     decreeIn: 90,
     autoSell: {},
     autoSellIn: AUTO_SELL_EVERY,
+    autoCraft: {},
     autoReport: { units: 0, credits: 0, in: AUTO_REPORT_EVERY },
   };
 }
@@ -172,6 +176,7 @@ export type Action =
   | { type: 'payDebt'; amount: number }
   | { type: 'setAutoSell'; good: GoodId; on?: boolean; keep?: number }
   | { type: 'setAutoSellGroup'; goods: GoodId[]; on: boolean }
+  | { type: 'setAutoCraft'; recipe: ItemId; on?: boolean; target?: number }
   | { type: 'reset'; now: number };
 
 export function reduce(prev: GameState, a: Action): GameState {
@@ -283,6 +288,16 @@ export function reduce(prev: GameState, a: Action): GameState {
       return s;
     }
 
+    case 'setAutoCraft': {
+      const cur = s.autoCraft[a.recipe] ?? { on: false, target: 0 };
+      s.autoCraft[a.recipe] = {
+        on: a.on ?? cur.on,
+        target: a.target === undefined ? cur.target : Math.max(0, Math.floor(a.target) || 0),
+      };
+      if (s.autoCraft[a.recipe]!.on) runAutoCraft(s);
+      return s;
+    }
+
     case 'setAutoSellGroup': {
       for (const g of a.goods) s.autoSell[g] = { on: a.on, keep: s.autoSell[g]?.keep ?? 0 };
       return s;
@@ -328,12 +343,46 @@ export function runAutoSell(s: GameState) {
   }
 }
 
+/** How many of `g` are free to use: what you hold minus the auto-sell "keep" reserve. */
+const spare = (s: GameState, g: GoodId) => have(s, g) - (s.autoSell[g]?.on ? s.autoSell[g]!.keep : 0);
+
+/** Fill free Fabricator slots from auto-craft rules, taking turns between recipes. */
+export function runAutoCraft(s: GameState) {
+  const rules = [...RECIPES].reverse().filter((r) => s.autoCraft[r.id]?.on);
+  if (!rules.length) return;
+  let queued = true;
+  while (queued && s.craftQueue.length < maxQueue(s)) {
+    queued = false;
+    for (const r of rules) {
+      if (s.craftQueue.length >= maxQueue(s)) break;
+      const target = s.autoCraft[r.id]!.target;
+      const pending = s.craftQueue.filter((j) => j.recipe === r.id).length;
+      if (target > 0 && have(s, r.id) + pending >= target) continue;
+      const ok = (Object.entries(r.inputs) as [GoodId, number][]).every(([g, n]) => spare(s, g) >= n);
+      if (!ok) continue;
+      spend(s, 0, r.inputs);
+      s.craftQueue.push({ recipe: r.id, remaining: r.seconds });
+      queued = true;
+    }
+  }
+}
+
 /** Advance the simulation to `now`. Mutates `s`. Offline time is capped. */
 export function tick(s: GameState, now: number) {
   let dt = (now - s.lastTick) / 1000;
   s.lastTick = now;
   if (!(dt > 0)) return;
   dt = Math.min(dt, OFFLINE_CAP_SECONDS);
+  // Long gaps (offline time) run in small steps so auto-craft and auto-sell keep up
+  while (dt > 0) {
+    const d = Math.min(dt, AUTO_SELL_EVERY);
+    step(s, d);
+    dt -= d;
+  }
+}
+
+function step(s: GameState, dt: number) {
+  runAutoCraft(s);
 
   // Mining, limited by hold space
   const rate = miningRate(s);
@@ -354,6 +403,7 @@ export function tick(s: GameState, now: number) {
     if (job.remaining <= 1e-9) {
       s.hold[job.recipe] = (s.hold[job.recipe] ?? 0) + 1;
       s.craftQueue.shift();
+      runAutoCraft(s);
     }
   }
 
@@ -412,6 +462,7 @@ export function migrate(raw: unknown, now: number): GameState | null {
     const s = raw as GameState;
     s.autoSell ??= {};
     s.autoSellIn ??= AUTO_SELL_EVERY;
+    s.autoCraft ??= {};
     s.autoReport ??= { units: 0, credits: 0, in: AUTO_REPORT_EVERY };
     return s;
   }
